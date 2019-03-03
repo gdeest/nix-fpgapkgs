@@ -1,4 +1,8 @@
+set -e
+
 source $stdenv/setup
+
+export LD_LIBRARY_PATH=$libPath:$LD_LIBRARY_PATH
 
 echo "unpacking $src..."
 mkdir extracted
@@ -21,7 +25,8 @@ EOF
 patchShebangs extracted
 
 patchelf --set-interpreter "$(cat $NIX_CC/nix-support/dynamic-linker)" \
-         extracted/tps/lnx64/jre/bin/java
+         extracted/tps/lnx64/jre9.0.4/bin/java
+#         extracted/tps/lnx64/jre/bin/java
 
 mkdir -p $out/opt
 
@@ -40,41 +45,102 @@ done
 rm -rf extracted
 
 # Patch installed files
-patchShebangs $out/opt/Vivado/2017.2/bin
-patchShebangs $out/opt/SDK/2017.2/bin
+patchShebangs $out/opt/Vivado/2018.3/bin
+patchShebangs $out/opt/SDK/2018.3/bin
+patchShebangs $out/opt/Vivado/2018.3/lnx64/tools/gcc/libexec/gcc/x86_64-unknown-linux-gnu/4.6.3/install-tools/
 echo "Shebangs patched"
 
 # Hack around lack of libtinfo in NixOS
-ln -s $ncurses/lib/libncursesw.so.6 $out/opt/Vivado/2017.2/lib/lnx64.o/libtinfo.so.5
-ln -s $ncurses/lib/libncursesw.so.6 $out/opt/SDK/2017.2/lib/lnx64.o/libtinfo.so.5
+ln -s $ncurses/lib/libncursesw.so.6 $out/opt/Vivado/2018.3/lib/lnx64.o/libtinfo.so.5
+ln -s $ncurses/lib/libncursesw.so.6 $out/opt/SDK/2018.3/lib/lnx64.o/libtinfo.so.5
 
 # Patch ELFs
-for f in $out/opt/Vivado/2017.2/bin/unwrapped/lnx64.o/*
+for f in $out/opt/Vivado/2018.3/bin/unwrapped/lnx64.o/*
 do
     patchelf --set-interpreter "$(cat $NIX_CC/nix-support/dynamic-linker)" $f || true
 done
 
-for f in $out/opt/SDK/2017.2/bin/unwrapped/lnx64.o/*
+for f in $out/opt/SDK/2018.3/bin/unwrapped/lnx64.o/*
 do
     patchelf --set-interpreter "$(cat $NIX_CC/nix-support/dynamic-linker)" $f || true
 done
 
-patchelf --set-interpreter "$(cat $NIX_CC/nix-support/dynamic-linker)" $out/opt/SDK/2017.2/eclipse/lnx64.o/eclipse
+for f in $out/opt/Vivado/2018.3/lnx64/tools/bin/*
+do
+    patchelf --set-interpreter "$(cat $NIX_CC/nix-support/dynamic-linker)" $f || true
+done
 
-patchelf --set-interpreter "$(cat $NIX_CC/nix-support/dynamic-linker)" $out/opt/SDK/2017.2/tps/lnx64/jre/bin/java
+for f in $out/opt/Vivado/2018.3/lnx64/tools/clang/bin/*
+do
+    patchelf --set-interpreter "$(cat $NIX_CC/nix-support/dynamic-linker)" $f || true
+done
+
+for f in $out/opt/Vivado/2018.3/lnx64/tools/clang-3.9/bin/*
+do
+    patchelf --set-interpreter "$(cat $NIX_CC/nix-support/dynamic-linker)" $(readlink -f $f) || true
+done
+
+for f in $out/opt/Vivado/2018.3/lnx64/tools/clang-3.9-csynth/bin/*
+do
+    patchelf --set-interpreter "$(cat $NIX_CC/nix-support/dynamic-linker)" $(readlink -f $f) || true
+done
+
+for f in $out/opt/Vivado/2018.3/lnx64/tools/gcc/bin/*
+do
+    patchelf --set-interpreter "$(cat $NIX_CC/nix-support/dynamic-linker)" $(readlink -f $f) || true
+done
+
+for f in $out/opt/Vivado/2018.3/lnx64/tools/dot/bin/*
+do
+    patchelf --set-interpreter "$(cat $NIX_CC/nix-support/dynamic-linker)" $(readlink -f $f) || true
+done
+
+patchelf --set-interpreter "$(cat $NIX_CC/nix-support/dynamic-linker)" $out/opt/Vivado/2018.3/lnx64/tools/gcc/libexec/gcc/x86_64-unknown-linux-gnu/4.6.3/install-tools/fixincl
+
+patchelf --set-interpreter "$(cat $NIX_CC/nix-support/dynamic-linker)" $out/opt/SDK/2018.3/eclipse/lnx64.o/eclipse
+
+patchelf --set-interpreter "$(cat $NIX_CC/nix-support/dynamic-linker)" $out/opt/SDK/2018.3/tps/lnx64/jre/bin/java
+patchelf --set-interpreter "$(cat $NIX_CC/nix-support/dynamic-linker)" $out/opt/Vivado/2018.3/tps/lnx64/jre9.0.4/bin/java
 
 echo "ELFs patched"
 
-wrapProgram $out/opt/Vivado/2017.2/bin/vivado --prefix LD_LIBRARY_PATH : "$libPath"
-wrapProgram $out/opt/SDK/2017.2/bin/xsdk --prefix LD_LIBRARY_PATH : "$libPath"
-wrapProgram $out/opt/SDK/2017.2/eclipse/lnx64.o/eclipse --prefix LD_LIBRARY_PATH : "$libPath"
-wrapProgram $out/opt/SDK/2017.2/tps/lnx64/jre/bin/java --prefix LD_LIBRARY_PATH : "$libPath"
-# wrapProgram on its own will not work because of the way the Vivado script runs ./launch
-# Therefore, we need Even More Patches...
-sed -i -- 's|`basename "\$0"`|vivado|g' $out/opt/Vivado/2017.2/bin/.vivado-wrapped
-sed -i -- 's|`basename "\$0"`|xsdk|g' $out/opt/SDK/2017.2/bin/.xsdk-wrapped
+vivado_bins="apcc diffbd hw_server hw_serverpv loader numxscreens sdx_server
+svf_utility symbol_server tcflog updatemem vcse_server vivado vivado_hls vlm
+wbtcv xar xcpp xcrg xelab xlicdiag xrcserver xsc xsdb xsim xtclsh xvc_pcie xvhdl
+xvlog"
+
+mkdir $out/bin
+
+for vivado_bin in $vivado_bins;
+do
+    wrapProgram $out/opt/Vivado/2018.3/bin/$vivado_bin --prefix LD_LIBRARY_PATH : "$libPath"
+    sed -i -- "s|\`basename \"\$0\"\`|$vivado_bin|g" $out/opt/Vivado/2018.3/bin/.$vivado_bin-wrapped
+    ln -s $out/opt/Vivado/2018.3/bin/$vivado_bin $out/bin/$vivado_bin
+done
+
+wrapProgram $out/opt/SDK/2018.3/bin/xsdk --prefix LD_LIBRARY_PATH : "$libPath"
+sed -i -- 's|`basename "\$0"`|xsdk|g' $out/opt/SDK/2018.3/bin/.xsdk-wrapped
+ln -s $out/opt/SDK/2018.3/bin/xsdk $out/bin/xsdk
+
+# wrapProgram $out/opt/Vivado/2018.3/bin/vivado --prefix LD_LIBRARY_PATH : "$libPath"
+# wrapProgram $out/opt/Vivado/2018.3/bin/vivado --prefix LD_LIBRARY_PATH : "$libPath"
+wrapProgram $out/opt/Vivado/2018.3/tps/lnx64/jre9.0.4/bin/java --prefix LD_LIBRARY_PATH : "$libPath"
+wrapProgram $out/opt/SDK/2018.3/eclipse/lnx64.o/eclipse --prefix LD_LIBRARY_PATH : "$libPath"
+wrapProgram $out/opt/SDK/2018.3/tps/lnx64/jre9.0.4/bin/java --prefix LD_LIBRARY_PATH : "$libPath"
+
+# # wrapProgram on its own will not work because of the way the Vivado script runs ./launch
+# # Therefore, we need Even More Patches...
+# sed -i -- 's|`basename "\$0"`|vivado|g' $out/opt/Vivado/2018.3/bin/.vivado-wrapped
+# sed -i -- 's|`basename "\$0"`|xsdk|g' $out/opt/SDK/2018.3/bin/.xsdk-wrapped
+# sed -i -- 's|`basename "\$0"`|xsdk|g' $out/opt/SDK/2018.3/bin/.xsdk-wrapped
 
 # Add vivado and xsdk to bin folder
-mkdir $out/bin
-ln -s $out/opt/Vivado/2017.2/bin/vivado $out/bin/vivado
-ln -s $out/opt/SDK/2017.2/bin/xsdk $out/bin/xsdk
+# ln -s $out/opt/Vivado/2018.3/bin/vivado $out/bin/vivado
+
+# Manually GCC mkheaders
+$out/opt/Vivado/2018.3/lnx64/tools/gcc/libexec/gcc/x86_64-unknown-linux-gnu/4.6.3/install-tools/mkheaders $out/opt/Vivado/2018.3/lnx64/tools/gcc
+
+cp $out/opt/Vivado/2018.3/lnx64/tools/gcc/include/c++/4.6.3/parallel/*.h $out/opt/Vivado/2018.3/lnx64/tools/gcc/include/c++/4.6.3/
+cp $out/opt/Vivado/2018.3/lnx64/tools/gcc/include/c++/4.6.3/parallel/*.h $out/opt/Vivado/2018.3/lnx64/tools/gcc/include/
+
+
